@@ -7,6 +7,10 @@ on:
         type: boolean
         description: "Force push even if upstream changed (use with caution)"
         default: false
+      use-proxy:
+        type: boolean
+        description: "Route scrape through tinyproxy on a GitHub-hosted runner instead of self-hosted"
+        default: false
 
 env:
   STATE_CODE: wv
@@ -14,7 +18,7 @@ env:
 jobs:
   scrape:
     name: "🕷️ Scrape Data"
-    runs-on: self-hosted
+    runs-on: ${{ inputs.use-proxy && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 720
     permissions:
       contents: write
@@ -39,5 +43,7 @@ jobs:
               "DC_API_KEY": "${{ secrets.DC_API_KEY }}",
               "NEW_YORK_API_KEY": "${{ secrets.NEW_YORK_API_KEY }}",
               "INDIANA_API_KEY": "${{ secrets.INDIANA_API_KEY }}",
-              "USER_AGENT": "${{ secrets.USER_AGENT }}"
+              "USER_AGENT": "${{ secrets.USER_AGENT }}",
+              "HTTPS_PROXY": "${{ inputs.use-proxy && secrets.PROXY_URL || '' }}",
+              "HTTP_PROXY": "${{ inputs.use-proxy && secrets.PROXY_URL || '' }}"
             }

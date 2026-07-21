@@ -11,23 +11,31 @@ on:
         default: false
       use-self-hosted:
         type: boolean
-        description: "Force self-hosted for this manual run instead of the default tinyproxy + GitHub-hosted path (e.g. to test without the proxy)"
+        description: "Force self-hosted for this manual run instead of the default tinyproxy + GitHub-hosted path (only meaningful for locales configured runner: self-hosted; e.g. to test without the proxy)"
         default: false
 
 env:
   STATE_CODE: wv
-  # workflow_dispatch's `inputs.use-proxy` default only applies to the manual-
-  # dispatch UI -- it's simply unset (falsy) on a `schedule` trigger regardless
-  # of that declared default, so checking `inputs.use-proxy` alone meant the
-  # nightly cron always fell through to self-hosted, silently depending on a
-  # laptop being on and connected for every automatic run. Proxy is now the
-  # default for anything that isn't an explicit manual opt-out.
-  USE_PROXY: ${{ !(github.event_name == 'workflow_dispatch' && inputs.use-self-hosted) }}
+  # locale.runner is a render-time literal ("self-hosted" or "ubuntu-latest"),
+  # not a runtime value -- runs-on: and this env: block can't read each other
+  # or their own sibling keys, so the literal gets inlined directly wherever
+  # it's needed below instead of routed through a shared variable.
+  #
+  # inputs.use-self-hosted only ever populates on a workflow_dispatch event --
+  # it's simply unset (falsy) on the nightly `schedule` trigger regardless of
+  # its declared default, so a plain `inputs.use-self-hosted` check would only
+  # ever fire on a manual run. For a self-hosted-flagged locale, route through
+  # tinyproxy on a GitHub-hosted runner by default and treat self-hosted as an
+  # explicit manual opt-out -- proxy running unattended was the whole point;
+  # self-hosted alone silently depended on a laptop being on and connected for
+  # every single automatic run. Locales that were never self-hosted (the
+  # literal below is "ubuntu-latest") are untouched by any of this.
+  USE_PROXY: ${{ 'self-hosted' == 'self-hosted' && !(github.event_name == 'workflow_dispatch' && inputs.use-self-hosted) }}
 
 jobs:
   scrape:
     name: "🕷️ Scrape Data"
-    runs-on: ${{ (github.event_name != 'workflow_dispatch' || !inputs.use-self-hosted) && 'ubuntu-latest' || 'self-hosted' }}
+    runs-on: ${{ (github.event_name == 'workflow_dispatch' && inputs.use-self-hosted) && 'self-hosted' || ('self-hosted' == 'self-hosted' && 'ubuntu-latest' || 'self-hosted') }}
     timeout-minutes: 720
     permissions:
       contents: write

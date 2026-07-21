@@ -9,18 +9,25 @@ on:
         type: boolean
         description: "Force push even if upstream changed (use with caution)"
         default: false
-      use-proxy:
+      use-self-hosted:
         type: boolean
-        description: "Route scrape through tinyproxy on a GitHub-hosted runner instead of self-hosted"
+        description: "Force self-hosted for this manual run instead of the default tinyproxy + GitHub-hosted path (e.g. to test without the proxy)"
         default: false
 
 env:
   STATE_CODE: wv
+  # workflow_dispatch's `inputs.use-proxy` default only applies to the manual-
+  # dispatch UI -- it's simply unset (falsy) on a `schedule` trigger regardless
+  # of that declared default, so checking `inputs.use-proxy` alone meant the
+  # nightly cron always fell through to self-hosted, silently depending on a
+  # laptop being on and connected for every automatic run. Proxy is now the
+  # default for anything that isn't an explicit manual opt-out.
+  USE_PROXY: ${{ !(github.event_name == 'workflow_dispatch' && inputs.use-self-hosted) }}
 
 jobs:
   scrape:
     name: "🕷️ Scrape Data"
-    runs-on: ${{ inputs.use-proxy && 'ubuntu-latest' || 'self-hosted' }}
+    runs-on: ${{ (github.event_name != 'workflow_dispatch' || !inputs.use-self-hosted) && 'ubuntu-latest' || 'self-hosted' }}
     timeout-minutes: 720
     permissions:
       contents: write
@@ -46,6 +53,6 @@ jobs:
               "NEW_YORK_API_KEY": "${{ secrets.NEW_YORK_API_KEY }}",
               "INDIANA_API_KEY": "${{ secrets.INDIANA_API_KEY }}",
               "USER_AGENT": "${{ secrets.USER_AGENT }}",
-              "HTTPS_PROXY": "${{ inputs.use-proxy && secrets.PROXY_URL || '' }}",
-              "HTTP_PROXY": "${{ inputs.use-proxy && secrets.PROXY_URL || '' }}"
+              "HTTPS_PROXY": "${{ env.USE_PROXY == 'true' && secrets.PROXY_URL || '' }}",
+              "HTTP_PROXY": "${{ env.USE_PROXY == 'true' && secrets.PROXY_URL || '' }}"
             }
